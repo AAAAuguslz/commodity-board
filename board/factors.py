@@ -109,6 +109,11 @@ def score_frame(dom_rows: pd.DataFrame, panel: pd.DataFrame, foreign: pd.DataFra
     d["spread_chg"] = sp_chg
     d["f_spread"] = clip2(d["spread_chg"] / (0.5 * d["atr"]))
 
+    if foreign is None or fx is None:
+        for c in ("f_foreign", "f_import_window", "ice", "fx", "import_profit"):
+            d[c] = np.nan
+        return _combine(d, cfg)
+
     # ---- 6 外盘：ICE 自身趋势计数 − 2，只用 t 日之前的已收盘值
     f = foreign.sort_values("date").copy()
     fc = f["close"]
@@ -135,8 +140,10 @@ def score_frame(dom_rows: pd.DataFrame, panel: pd.DataFrame, foreign: pd.DataFra
         lambda s: (s[:-1] < s[-1]).mean() if len(s) > 1 else np.nan, raw=True)
     d["profit_pct"] = pct
     d["f_import_window"] = clip2((0.5 - pct) * 4)
+    return _combine(d, cfg)
 
-    # ---- 合成
+
+def _combine(d: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     fac = {k: v for k, v in cfg["score"]["factors"].items() if v.get("enabled", True)}
     cols = [f"f_{k}" for k in fac]
     wts = np.array([fac[k]["weight"] for k in fac])

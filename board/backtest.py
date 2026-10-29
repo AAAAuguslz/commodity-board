@@ -24,8 +24,8 @@ def load(cfg):
         panel = pd.read_csv(RAW / f"{cfg['code']}_main.csv", parse_dates=["date"])
     else:
         panel = pd.read_csv(RAW / f"{cfg['code']}_contracts.csv", parse_dates=["date"])
-    foreign = pd.read_csv(RAW / "foreign.csv", parse_dates=["date"])
-    fx = pd.read_csv(RAW / "fx.csv", parse_dates=["date"])
+    foreign = pd.read_csv(RAW / "foreign.csv", parse_dates=["date"]) if (RAW / "foreign.csv").exists() else None
+    fx = pd.read_csv(RAW / "fx.csv", parse_dates=["date"]) if (RAW / "fx.csv").exists() else None
     return panel, foreign, fx
 
 
@@ -33,7 +33,7 @@ def build(cfg):
     panel, foreign, fx = load(cfg)
     p = cfg["score"]["params"]
     panel = pd.concat([per_contract_indicators(g, p) for _, g in panel.groupby("contract")])
-    order = sorted(panel["contract"].unique(), key=lambda s: int(s[len(cfg["code"]):]))
+    order = sorted(panel["contract"].unique(), key=lambda s: int(s[len(cfg["code"]):]) if s[len(cfg["code"]):].isdigit() else 0)
     dom = pick_dominant(panel, order)
     rows = dom.merge(panel, left_on=["date", "dominant"], right_on=["date", "contract"], how="left")
     return score_frame(rows, panel, foreign, fx, cfg), panel
@@ -92,10 +92,16 @@ def main(cfg_path="config/sugar.yaml", source=None, start=None):
         cfg["backtest"]["start"] = start
     if cfg.get("data_source") == "main":  # 单一连续序列没有次主力，月差因子不可用
         cfg["score"]["factors"]["spread"]["enabled"] = False
+    for fname in ("foreign", "fx"):
+        if not (RAW / f"{fname}.csv").exists():  # 外盘或汇率缺失：外盘、进口窗口两个因子停用
+            cfg["score"]["factors"]["foreign"]["enabled"] = False
+            cfg["score"]["factors"]["import_window"]["enabled"] = False
+    print("参与打分的因子：", [k for k, v in cfg["score"]["factors"].items() if v.get("enabled", True)])
     OUT.mkdir(exist_ok=True)
+    tag = cfg.get("data_source", "contracts")
     d, panel = build(cfg)
     d = d[d["date"] >= pd.Timestamp(cfg["backtest"]["start"])].reset_index(drop=True)
-    d.to_csv(OUT / "scores.csv", index=False)
+    d.to_csv(OUT / f"scores_{tag}.csv", index=False)
     scored = d[d["score"].notna()]
 
     lines = [f"# {cfg['name']} 多空打分回测 v0", "",
@@ -135,7 +141,7 @@ def main(cfg_path="config/sugar.yaml", source=None, start=None):
         strat.append({"策略": name, **m}); curves[name] = eq
     st = pd.DataFrame(strat)
     summary["strategies"] = st.to_dict("records")
-    pd.DataFrame(curves).to_csv(OUT / "equity.csv")
+    pd.DataFrame(curves).to_csv(OUT / f"equity_{tag}.csv")
     lines += ["## 简单策略对比（日频，t+1 开盘执行）", "", fmt(st), ""]
 
     # 档位时间占比
@@ -147,7 +153,7 @@ def main(cfg_path="config/sugar.yaml", source=None, start=None):
     lines += ["## 数据对账（最近一个交易日）", "",
               f"日期 {last['date']:%Y-%m-%d}，主力 {last['dominant']}，次主力 {last['next']}；"
               f"收 {last['close']:.0f}，MA5 {last['ma5']:.0f} / MA10 {last['ma10']:.0f} / MA20 {last['ma20']:.0f} / MA60 {last['ma60']:.0f}，"
-              f"ATR {last['atr']:.1f}；ICE(前一日) {last['ice']:.2f}，汇率 {last['fx']:.4f}，进口利润 {last['import_profit']:.0f}；"
+              f"ATR {last['atr']:.1f}；"
               f"总分 {last['score']:.2f}（{last['tier']}）", ""]
     chk = panel[(panel["date"] == "2026-10-21") & panel["contract"].isin(["SR2701", "SR2705", "SR_MAIN"])]
     if len(chk):
@@ -160,8 +166,8 @@ def main(cfg_path="config/sugar.yaml", source=None, start=None):
         rolls = d.loc[d["dominant"] != d["dominant"].shift(), ["date", "dominant"]]
     lines += ["## 主力换月记录", "", fmt(rolls.assign(date=rolls["date"].dt.strftime("%Y-%m-%d"))), ""]
 
-    (OUT / "backtest_report.md").write_text("\n".join(lines), encoding="utf-8")
-    (OUT / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1, default=float))
+    (OUT / f"backtest_{tag}.md").write_text("\n".join(lines), encoding="utf-8")
+    (OUT / f"summary_{tag}.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1, default=float))
     print("\n".join(lines))
 
 
