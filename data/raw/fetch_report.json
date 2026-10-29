@@ -35,6 +35,9 @@
  "SR2707": 71,
  "SR2709": 27,
  "SR2711": 0,
- "foreign": 454,
- "fx": "ERR https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXCHUS: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=20)"
+ "foreign_yahoo": "ERR https://query1.finance.yahoo.com/v8/finance/chart/SB=F?range=max&interval=1d: 429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/SB=F?range=max&interval=1d",
+ "foreign_sina": "454 行，2016-10-31 → 2019-06-12",
+ "foreign_used": "sina",
+ "fx_yahoo": "ERR https://query1.finance.yahoo.com/v8/finance/chart/CNY=X?range=max&interval=1d: 429 Client Error: Too Many Requests for url: https://query1.finance.yahoo.com/v8/finance/chart/CNY=X?range=max&interval=1d",
+ "fx_fred": "ERR https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXCHUS: HTTPSConnectionPool(host='fred.stlouisfed.org', port=443): Read timed out. (read timeout=60)"
 }
