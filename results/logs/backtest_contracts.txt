@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/home/runner/work/commodity-board/commodity-board/board/backtest.py", line 96, in main
+    d, panel = build(cfg)
+               ^^^^^^^^^^
+  File "/home/runner/work/commodity-board/commodity-board/board/backtest.py", line 33, in build
+    panel, foreign, fx = load(cfg)
+                         ^^^^^^^^^
+  File "/home/runner/work/commodity-board/commodity-board/board/backtest.py", line 28, in load
+    fx = pd.read_csv(RAW / "fx.csv", parse_dates=["date"])
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1866, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 423, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 2721, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 2988, in _make_engine
+    self.handles = get_handle(
+                   ^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/pandas/io/common.py", line 948, in get_handle
+    handle = open(handle, ioargs.mode)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/runner/work/commodity-board/commodity-board/data/raw/fx.csv'
