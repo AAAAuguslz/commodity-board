@@ -26,6 +26,9 @@ def per_contract_indicators(df: pd.DataFrame, p: dict) -> pd.DataFrame:
     df["ma20_slope"] = df["ma20"] - df["ma20"].shift(5)
     df["mom"] = (c - c.shift(p["momentum_n"])) / df["atr"]
     df["oi_chg"] = df["oi"] / df["oi"].shift(p["oi_n"]) - 1
+    if "roll" in df:  # 连续合约：换月后 oi_n 天内持仓变化不可比，置空
+        recent_roll = df["roll"].astype(bool).rolling(p["oi_n"], min_periods=1).max().astype(bool)
+        df.loc[recent_roll, "oi_chg"] = np.nan
     df["px_chg_atr"] = (c - c.shift(p["oi_n"])) / df["atr"]
     n = p["channel_n"]
     df["ch_hi"] = h.shift(1).rolling(n).max()
@@ -125,7 +128,8 @@ def score_frame(dom_rows: pd.DataFrame, panel: pd.DataFrame, foreign: pd.DataFra
     cost = ((d["ice"] * ic["lb_to_ton"] + ic["premium_freight_usd"]) * d["fx"]
             * (1 + ic["tariff_out_of_quota"]) * (1 + ic["vat"]) + ic["port_processing_cny"])
     d["import_cost"] = cost
-    d["import_profit"] = d["close"] - cost
+    px = d["raw_close"] if "raw_close" in d else d["close"]  # 复权序列用原始价位算利润
+    d["import_profit"] = px - cost
     w = p["pct_window"]
     pct = d["import_profit"].rolling(w, min_periods=120).apply(
         lambda s: (s[:-1] < s[-1]).mean() if len(s) > 1 else np.nan, raw=True)

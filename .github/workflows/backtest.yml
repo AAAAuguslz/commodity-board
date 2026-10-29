@@ -1,6 +1,16 @@
 name: backtest
 on:
   workflow_dispatch:
+    inputs:
+      source:
+        description: "数据源：contracts（新浪单合约）或 main（Wind 主力连续）"
+        default: contracts
+      start:
+        description: "回测起始日"
+        default: "2023-01-01"
+      fetch:
+        description: "是否重新抓取行情（true/false）"
+        default: "true"
 permissions:
   contents: write
 jobs:
@@ -12,13 +22,21 @@ jobs:
         with: {python-version: "3.12"}
       - run: pip install -r requirements.txt
       - name: 抓取行情
-        run: python -m board.fetch
+        if: inputs.fetch == 'true'
+        run: |
+          mkdir -p results/logs
+          set -o pipefail
+          python -m board.fetch 2>&1 | tee results/logs/fetch.txt
       - name: 回测
-        run: python -m board.backtest
-      - name: 提交结果
+        run: |
+          mkdir -p results/logs
+          set -o pipefail
+          python -c "from board.backtest import main; main('config/sugar.yaml', '${{ inputs.source }}', '${{ inputs.start }}')" 2>&1 | tee results/logs/backtest_${{ inputs.source }}.txt
+      - name: 提交结果（失败也提交日志）
+        if: always()
         run: |
           git config user.name "board-bot"
           git config user.email "board-bot@users.noreply.github.com"
           git add data/raw results
-          git commit -m "backtest: $(date -u +%F)" || echo "no changes"
-          git push
+          git commit -m "backtest(${{ inputs.source }}): $(date -u +%F)" || echo "no changes"
+          git pull --rebase -q && git push

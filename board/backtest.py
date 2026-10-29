@@ -20,7 +20,10 @@ TIERS = ["强空", "偏空", "中性", "偏多", "强多"]
 
 
 def load(cfg):
-    panel = pd.read_csv(RAW / f"{cfg['code']}_contracts.csv", parse_dates=["date"])
+    if cfg.get("data_source") == "main":  # 主力连续（如 Wind 导出，已比例复权）
+        panel = pd.read_csv(RAW / f"{cfg['code']}_main.csv", parse_dates=["date"])
+    else:
+        panel = pd.read_csv(RAW / f"{cfg['code']}_contracts.csv", parse_dates=["date"])
     foreign = pd.read_csv(RAW / "foreign.csv", parse_dates=["date"])
     fx = pd.read_csv(RAW / "fx.csv", parse_dates=["date"])
     return panel, foreign, fx
@@ -81,8 +84,14 @@ def fmt(df):
     return df.to_markdown(index=False, floatfmt=".2f")
 
 
-def main(cfg_path="config/sugar.yaml"):
+def main(cfg_path="config/sugar.yaml", source=None, start=None):
     cfg = yaml.safe_load((ROOT / cfg_path).read_text(encoding="utf-8"))
+    if source:
+        cfg["data_source"] = source
+    if start:
+        cfg["backtest"]["start"] = start
+    if cfg.get("data_source") == "main":  # 单一连续序列没有次主力，月差因子不可用
+        cfg["score"]["factors"]["spread"]["enabled"] = False
     OUT.mkdir(exist_ok=True)
     d, panel = build(cfg)
     d = d[d["date"] >= pd.Timestamp(cfg["backtest"]["start"])].reset_index(drop=True)
@@ -140,12 +149,15 @@ def main(cfg_path="config/sugar.yaml"):
               f"收 {last['close']:.0f}，MA5 {last['ma5']:.0f} / MA10 {last['ma10']:.0f} / MA20 {last['ma20']:.0f} / MA60 {last['ma60']:.0f}，"
               f"ATR {last['atr']:.1f}；ICE(前一日) {last['ice']:.2f}，汇率 {last['fx']:.4f}，进口利润 {last['import_profit']:.0f}；"
               f"总分 {last['score']:.2f}（{last['tier']}）", ""]
-    chk = panel[(panel["date"] == "2026-10-21") & panel["contract"].isin(["SR2701", "SR2705"])]
+    chk = panel[(panel["date"] == "2026-10-21") & panel["contract"].isin(["SR2701", "SR2705", "SR_MAIN"])]
     if len(chk):
         lines += ["10/21 对照 v11 看板（v11：SR2701 MA5 5,388 / MA10 5,440 / MA20 5,397 / MA60 5,360 / ATR 58.8；"
                   "SR2705 MA5 5,470 / MA10 5,520 / MA20 5,475 / MA60 5,433 / ATR 59.7）", "",
                   fmt(chk[["contract", "close", "oi", "ma5", "ma10", "ma20", "ma60", "atr"]]), ""]
-    rolls = d.loc[d["dominant"] != d["dominant"].shift(), ["date", "dominant"]]
+    if "roll" in d:
+        rolls = d.loc[d["roll"].astype(bool), ["date", "dominant"]]
+    else:
+        rolls = d.loc[d["dominant"] != d["dominant"].shift(), ["date", "dominant"]]
     lines += ["## 主力换月记录", "", fmt(rolls.assign(date=rolls["date"].dt.strftime("%Y-%m-%d"))), ""]
 
     (OUT / "backtest_report.md").write_text("\n".join(lines), encoding="utf-8")
