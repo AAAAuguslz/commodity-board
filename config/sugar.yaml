@@ -1,0 +1,50 @@
+# 白糖品种配置：代码里不写死任何品种参数
+name: 白糖
+code: SR                 # 郑商所品种代码
+exchange: CZCE
+contract_months: [1, 3, 5, 7, 9, 11]
+first_contract: 2201     # 回测抓取的最早合约
+last_contract: 2711
+
+foreign:
+  name: ICE 11 号原糖
+  sina_symbol: SB        # 新浪外盘连续合约
+  unit: 美分/磅
+
+fx:
+  fred_series: DEXCHUS   # 美元兑人民币（FRED，回测用；日更时改用中间价）
+
+import_cost:             # 成本 = (原糖×22.046 + premium_freight) × 汇率 × (1+关税) × 1.13 + port_processing
+  lb_to_ton: 22.046
+  premium_freight_usd: 73.13
+  vat: 0.13
+  port_processing_cny: 452
+  tariff_out_of_quota: 0.50
+  tariff_in_quota: 0.15
+
+backtest:
+  start: 2023-01-01
+  horizons: [5, 20]
+
+score:
+  tiers:                 # 总分 −2..+2 → 五档
+    strong_long: 1.0
+    long: 0.4
+    short: -0.4
+    strong_short: -1.0
+  factors:               # 权重会在可用因子之间重新归一
+    trend:        {weight: 0.20, label: 趋势}
+    momentum:     {weight: 0.10, label: 动量}
+    oi_price:     {weight: 0.15, label: 量仓}
+    breakout:     {weight: 0.15, label: 关键位}
+    spread:       {weight: 0.10, label: 月差}
+    basis:        {weight: 0.10, label: 基差, enabled: false, note: 广西现货无免费历史，回测不含}
+    foreign:      {weight: 0.10, label: 外盘}
+    import_window: {weight: 0.10, label: 进口窗口}
+  params:
+    atr_n: 14
+    momentum_n: 20
+    oi_n: 5
+    channel_n: 20
+    spread_n: 20
+    pct_window: 250

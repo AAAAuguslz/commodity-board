@@ -1,0 +1,24 @@
+name: backtest
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt
+      - name: 抓取行情
+        run: python -m board.fetch
+      - name: 回测
+        run: python -m board.backtest
+      - name: 提交结果
+        run: |
+          git config user.name "board-bot"
+          git config user.email "board-bot@users.noreply.github.com"
+          git add data/raw results
+          git commit -m "backtest: $(date -u +%F)" || echo "no changes"
+          git push
