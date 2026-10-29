@@ -36,7 +36,7 @@ def _get(url: str, tries: int = 3) -> str:
     last = None
     for i in range(tries):
         try:
-            r = requests.get(url, headers=HEADERS, timeout=20)
+            r = requests.get(url, headers=HEADERS, timeout=60)
             r.raise_for_status()
             return r.text
         except Exception as e:  # noqa: BLE001
@@ -72,7 +72,17 @@ def fetch_domestic(symbol: str) -> pd.DataFrame:
     return df
 
 
-def fetch_foreign(symbol: str) -> pd.DataFrame:
+def fetch_yahoo(ticker: str) -> pd.DataFrame:
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?range=max&interval=1d"
+    j = json.loads(_get(url))["chart"]["result"][0]
+    q = j["indicators"]["quote"][0]
+    df = pd.DataFrame({"date": pd.to_datetime(j["timestamp"], unit="s").normalize(),
+                       "open": q["open"], "high": q["high"], "low": q["low"],
+                       "close": q["close"], "volume": q.get("volume")})
+    return df.dropna(subset=["close"]).drop_duplicates("date", keep="last")
+
+
+def fetch_foreign_sina(symbol: str) -> pd.DataFrame:
     url = SINA + f"GlobalFuturesService.getGlobalFuturesDailyKLine?symbol={symbol}&source=web"
     rows = _jsonp(_get(url))
     df = pd.DataFrame(rows)
@@ -83,7 +93,7 @@ def fetch_foreign(symbol: str) -> pd.DataFrame:
     return df
 
 
-def fetch_fx(series: str) -> pd.DataFrame:
+def fetch_fx_fred(series: str) -> pd.DataFrame:
     text = _get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}")
     df = pd.read_csv(io.StringIO(text))
     df.columns = ["date", "fx"]
@@ -110,19 +120,33 @@ def main(cfg_path: str = "config/sugar.yaml") -> None:
     if frames:
         pd.concat(frames).to_csv(RAW / f"{cfg['code']}_contracts.csv", index=False)
 
-    try:
-        f = fetch_foreign(cfg["foreign"]["sina_symbol"])
-        f.to_csv(RAW / "foreign.csv", index=False)
-        report["foreign"] = len(f)
-    except Exception as e:  # noqa: BLE001
-        report["foreign"] = f"ERR {e}"
+    # 外盘：取历史最长的来源；最近 30 天与新浪对照，差异写进报告
+    cands = {}
+    for name, fn in [("yahoo", lambda: fetch_yahoo(cfg["foreign"]["yahoo"])),
+                     ("sina", lambda: fetch_foreign_sina(cfg["foreign"]["sina_symbol"]))]:
+        try:
+            cands[name] = fn()
+            report[f"foreign_{name}"] = f"{len(cands[name])} 行，{cands[name]['date'].min():%F} → {cands[name]['date'].max():%F}"
+        except Exception as e:  # noqa: BLE001
+            report[f"foreign_{name}"] = f"ERR {e}"
+    if cands:
+        best = max(cands, key=lambda k: len(cands[k]))
+        cands[best].to_csv(RAW / "foreign.csv", index=False)
+        report["foreign_used"] = best
+        if len(cands) == 2:
+            m = cands["yahoo"].merge(cands["sina"], on="date", suffixes=("_y", "_s")).tail(30)
+            report["foreign_check_max_abs_diff_30d"] = float((m["close_y"] - m["close_s"]).abs().max())
 
-    try:
-        fx = fetch_fx(cfg["fx"]["fred_series"])
-        fx.to_csv(RAW / "fx.csv", index=False)
-        report["fx"] = len(fx)
-    except Exception as e:  # noqa: BLE001
-        report["fx"] = f"ERR {e}"
+    fx_sources = [("yahoo", lambda: fetch_yahoo(cfg["fx"]["yahoo"])[["date", "close"]].rename(columns={"close": "fx"})),
+                  ("fred", lambda: fetch_fx_fred(cfg["fx"]["fred_series"]))]
+    for name, fn in fx_sources:
+        try:
+            fx = fn().dropna()
+            fx.to_csv(RAW / "fx.csv", index=False)
+            report["fx"] = f"{name}: {len(fx)} 行，{fx['date'].min():%F} → {fx['date'].max():%F}"
+            break
+        except Exception as e:  # noqa: BLE001
+            report[f"fx_{name}"] = f"ERR {e}"
 
     (RAW / "fetch_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1))
     print(json.dumps(report, ensure_ascii=False, indent=1))

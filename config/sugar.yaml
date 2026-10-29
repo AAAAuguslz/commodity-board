@@ -8,11 +8,13 @@ last_contract: 2711
 
 foreign:
   name: ICE 11 号原糖
-  sina_symbol: SB        # 新浪外盘连续合约
+  sina_symbol: SB        # 新浪外盘连续合约（约两年）
+  yahoo: SB=F            # Yahoo 连续合约（长历史）
   unit: 美分/磅
 
 fx:
-  fred_series: DEXCHUS   # 美元兑人民币（FRED，回测用；日更时改用中间价）
+  yahoo: CNY=X           # 美元兑人民币（回测用；日更时改用中间价）
+  fred_series: DEXCHUS   # 备用
 
 import_cost:             # 成本 = (原糖×22.046 + premium_freight) × 汇率 × (1+关税) × 1.13 + port_processing
   lb_to_ton: 22.046
